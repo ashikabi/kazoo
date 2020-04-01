@@ -19,6 +19,7 @@
 -export([maybe_add_proxies/3]).
 -export([gateways_to_endpoints/4]).
 -export([check_diversion_fields/1]).
+-export([is_test_number/2]).
 
 -export([get_resrc_id/1
         ,get_resrc_rev/1
@@ -27,7 +28,9 @@
         ,get_resrc_grace_period/1
         ,get_resrc_flags/1
         ,get_resrc_rules/1
+        ,get_resrc_rules_test/1
         ,get_resrc_raw_rules/1
+        ,get_resrc_raw_rules_test/1
         ,get_resrc_cid_rules/1
         ,get_resrc_cid_raw_rules/1
         ,get_resrc_gateways/1
@@ -55,7 +58,9 @@
         ,set_resrc_grace_period/2
         ,set_resrc_flags/2
         ,set_resrc_rules/2
+        ,set_resrc_rules_test/2
         ,set_resrc_raw_rules/2
+        ,set_resrc_raw_rules_test/2
         ,set_resrc_cid_rules/2
         ,set_resrc_cid_raw_rules/2
         ,set_resrc_gateways/2
@@ -135,7 +140,9 @@
                ,grace_period = 3 :: non_neg_integer()
                ,flags = [] :: list()
                ,rules = [] :: list()
+               ,rules_test = [] :: list()
                ,raw_rules = [] :: list()
+               ,raw_rules_test = [] :: list()
                ,cid_rules = [] :: list()
                ,cid_raw_rules = [] :: list()
                ,gateways = [] :: list()
@@ -221,6 +228,7 @@ resource_to_props(#resrc{}=Resource) ->
       ,{<<"Flags">>, Resource#resrc.flags}
       ,{<<"Codecs">>, Resource#resrc.codecs}
       ,{<<"Rules">>, Resource#resrc.raw_rules}
+      ,{<<"Rules-Test">>, Resource#resrc.raw_rules_test}
       ,{<<"Caller-ID-Rules">>, Resource#resrc.cid_raw_rules}
       ,{<<"Formatters">>, Resource#resrc.formatters}
       ,{<<"Privacy-Method">>,  Resource#resrc.privacy_method}
@@ -243,6 +251,19 @@ endpoints(Number, OffnetJObj) ->
     case maybe_get_endpoints(Number, OffnetJObj) of
         [] -> [];
         Endpoints -> sort_endpoints(Endpoints)
+    end.
+
+-spec is_test_number(kz_term:ne_binary(), kz_term:ne_binary()) -> boolean().
+is_test_number(Number, ResourceId) ->
+    Resource = get_resource(ResourceId),
+    Rules = get_resrc_rules_test(Resource),
+    maybe_match_test_number(Rules, Number).
+
+maybe_match_test_number([], _) -> 'false';
+maybe_match_test_number([Rule | Rules], Number) ->
+    case re:run(Number, Rule) of
+        {'match', _Captured} -> 'true';
+        'nomatch' -> maybe_match_test_number(Rules, Number)
     end.
 
 -spec maybe_get_endpoints(kz_term:ne_binary(), kapi_offnet_resource:req()) -> endpoints().
@@ -1076,17 +1097,19 @@ classifier_is_emergency(ClassifierJObj, _Classifier, DefaultEmergency) ->
 resource_from_jobj(JObj) ->
     Resource = #resrc{id=kz_doc:id(JObj)
                      ,rev=kz_doc:revision(JObj)
-                     ,name=kzd_resources:name(JObj)
-                     ,flags=kzd_resources:flags(JObj, [])
-                     ,require_flags=kzd_resources:require_flags(JObj, 'false')
-                     ,ignore_flags=kzd_resources:ignore_flags(JObj, 'false')
-                     ,format_from_uri=kzd_resources:format_from_uri(JObj, 'false')
-                     ,from_uri_realm=kzd_resources:from_uri_realm(JObj)
-                     ,from_account_realm=kzd_resources:from_account_realm(JObj)
-                     ,fax_option=kzd_resources:media_fax_option(JObj)
-                     ,raw_rules=kzd_resources:rules(JObj, [])
+                     ,name=kz_json:get_value(<<"name">>, JObj)
+                     ,flags=kz_json:get_value(<<"flags">>, JObj, [])
+                     ,require_flags=kz_json:is_true(<<"require_flags">>, JObj)
+                     ,ignore_flags=kz_json:is_true(<<"ignore_flags">>, JObj)
+                     ,format_from_uri=kz_json:is_true(<<"format_from_uri">>, JObj)
+                     ,from_uri_realm=kz_json:get_ne_value(<<"from_uri_realm">>, JObj)
+                     ,from_account_realm=kz_json:is_true(<<"from_account_realm">>, JObj)
+                     ,fax_option=kz_json:is_true([<<"media">>, <<"fax_option">>], JObj)
+                     ,raw_rules=kz_json:get_value(<<"rules">>, JObj, [])
+                     ,raw_rules_test=kz_json:get_value(<<"rules_test">>, JObj, [])
                      ,rules=resource_rules(JObj)
-                     ,cid_raw_rules=kzd_resources:cid_rules(JObj, [])
+                     ,rules_test=resource_rules_test(JObj)
+                     ,cid_raw_rules=kz_json:get_value(<<"cid_rules">>, JObj, [])
                      ,cid_rules=resource_cid_rules(JObj)
                      ,weight=resource_weight(JObj)
                      ,grace_period=resource_grace_period(JObj)
@@ -1146,8 +1169,15 @@ resource_rules([Rule|Rules], CompiledRules) ->
             resource_rules(Rules, CompiledRules)
     end.
 
--spec resource_cid_rules(kzd_resources:doc()) -> rules().
-resource_cid_rules(ResourceJObj) ->
+-spec resource_rules_test(kz_json:object()) -> rules().
+resource_rules_test(JObj) ->
+    Rules = kz_json:get_value(<<"rules_test">>, JObj, []),
+    lager:info("compiling resource test rules for ~s / ~s: ~p"
+              ,[kz_doc:account_db(JObj, <<"offnet">>), kz_doc:id(JObj), Rules]),
+    resource_rules(Rules, []).
+
+-spec resource_cid_rules(kz_json:object()) -> rules().
+resource_cid_rules(JObj) ->
     lager:info("compiling caller id rules for ~s / ~s"
               ,[kz_doc:account_db(ResourceJObj, <<"offnet">>), kz_doc:id(ResourceJObj)]
               ),
@@ -1307,8 +1337,14 @@ get_resrc_flags(#resrc{flags=Flags}) -> Flags.
 -spec get_resrc_rules(resource()) -> list().
 get_resrc_rules(#resrc{rules=Rules}) -> Rules.
 
+-spec get_resrc_rules_test(resource()) -> list().
+get_resrc_rules_test(#resrc{rules_test=Rules}) -> Rules.
+
 -spec get_resrc_raw_rules(resource()) -> list().
 get_resrc_raw_rules(#resrc{raw_rules=RawRules}) -> RawRules.
+
+-spec get_resrc_raw_rules_test(resource()) -> list().
+get_resrc_raw_rules_test(#resrc{raw_rules_test=RawRules}) -> RawRules.
 
 -spec get_resrc_cid_rules(resource()) -> list().
 get_resrc_cid_rules(#resrc{cid_rules=CIDRules}) -> CIDRules.
@@ -1386,8 +1422,14 @@ set_resrc_flags(Resource, Flags) -> Resource#resrc{flags=Flags}.
 -spec set_resrc_rules(resource(), list()) -> resource().
 set_resrc_rules(Resource, Rules) -> Resource#resrc{rules=Rules}.
 
+-spec set_resrc_rules_test(resource(), list()) -> resource().
+set_resrc_rules_test(Resource, Rules) -> Resource#resrc{rules_test=Rules}.
+
 -spec set_resrc_raw_rules(resource(), list()) -> resource().
 set_resrc_raw_rules(Resource, RawRules) -> Resource#resrc{raw_rules=RawRules}.
+
+-spec set_resrc_raw_rules_test(resource(), list()) -> resource().
+set_resrc_raw_rules_test(Resource, RawRules) -> Resource#resrc{raw_rules_test=RawRules}.
 
 -spec set_resrc_cid_rules(resource(), list()) -> resource().
 set_resrc_cid_rules(Resource, CIDRules) -> Resource#resrc{cid_rules=CIDRules}.
