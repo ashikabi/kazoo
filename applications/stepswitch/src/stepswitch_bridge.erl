@@ -740,17 +740,20 @@ set_emergency_device_meta(OffnetReq, Props) ->
 -spec set_emergency_address_meta(kapi_offnet_resource:req(), kz_term:proplist()) -> kz_term:proplist().
 set_emergency_address_meta(OffnetReq, Props) ->
     AccountDB = kzs_util:format_account_db(kapi_offnet_resource:account_id(OffnetReq)),
-    {'ok', Doc} = kz_datamgr:open_doc(AccountDB, kapi_offnet_resource:emergency_caller_id_number(OffnetReq)),
-    [{<<"Emergency-Address-Street-1">>, extract_e911_street_address_field(Doc, <<"street_address">>)}
-    ,{<<"Emergency-Address-Street-2">>,  extract_e911_street_address_field(Doc, <<"street_address_extended">>)}
-    ,{<<"Emergency-Address-City">>,  kzd_phone_numbers:e911_locality(Doc)}
-    ,{<<"Emergency-Address-Latitude">>, kzd_phone_numbers:e911_latitude(Doc)}
-    ,{<<"Emergency-Address-Longitude">>, kzd_phone_numbers:e911_latitude(Doc)}
-    ,{<<"Emergency-Address-Region">>,  kzd_phone_numbers:e911_region(Doc)}
-    ,{<<"Emergency-Address-Postal-Code">>,  kzd_phone_numbers:e911_postal_code(Doc)}
-    ,{<<"Emergency-Notfication-Contact-Emails">>, kzd_phone_numbers:e911_notification_contact_emails(Doc)}
-     | Props
-    ].
+    case kz_datamgr:open_doc(AccountDB, kapi_offnet_resource:emergency_caller_id_number(OffnetReq)) of
+        {'ok', Doc} ->
+            [{<<"Emergency-Address-Street-1">>, extract_e911_street_address_field(Doc, <<"street_address">>)}
+            ,{<<"Emergency-Address-Street-2">>,  extract_e911_street_address_field(Doc, <<"street_address_extended">>)}
+            ,{<<"Emergency-Address-City">>,  kzd_phone_numbers:e911_locality(Doc)}
+            ,{<<"Emergency-Address-Latitude">>, kzd_phone_numbers:e911_latitude(Doc)}
+            ,{<<"Emergency-Address-Longitude">>, kzd_phone_numbers:e911_latitude(Doc)}
+            ,{<<"Emergency-Address-Region">>,  kzd_phone_numbers:e911_region(Doc)}
+            ,{<<"Emergency-Address-Postal-Code">>,  kzd_phone_numbers:e911_postal_code(Doc)}
+            ,{<<"Emergency-Notfication-Contact-Emails">>, kzd_phone_numbers:e911_notification_contact_emails(Doc)}
+             | Props
+            ];
+        {'error', _} -> Props
+    end.
 
 -spec maybe_emergency_test_call(state()) -> boolean().
 maybe_emergency_test_call(#state{endpoints=Endpoints
