@@ -1181,7 +1181,7 @@ resource_rules_test(JObj) ->
     resource_rules(Rules, []).
 
 -spec resource_cid_rules(kz_json:object()) -> rules().
-resource_cid_rules(JObj) ->
+resource_cid_rules(ResourceJObj) ->
     lager:info("compiling caller id rules for ~s / ~s"
               ,[kz_doc:account_db(ResourceJObj, <<"offnet">>), kz_doc:id(ResourceJObj)]
               ),
