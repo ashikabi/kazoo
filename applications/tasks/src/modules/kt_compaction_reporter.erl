@@ -1,7 +1,6 @@
 %%%-----------------------------------------------------------------------------
 %%% @copyright (C) 2020-, 2600Hz
-%%% @doc
-%%% Collect and save/store compaction job's information for jobs started via sup commands,
+%%% @doc Collect and save/store compaction job's information for jobs started via sup commands,
 %%% CSV JOBS app, or auto compaction trigger.
 %%%
 %%% This Source Code Form is subject to the terms of the Mozilla Public
