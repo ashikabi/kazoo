@@ -129,7 +129,7 @@ remove(TaskId) ->
 
 -spec start_cleanup_pass() -> no_return.
 start_cleanup_pass() ->
-    _ = kz_process:spawn(fun kt_compactor:browse_dbs_for_triggers/1, [?MODULE]),
+    _ = kz_util:spawn(fun kt_compactor:browse_dbs_for_triggers/1, [?MODULE]),
     io:format("cleanup pass started~n"),
     no_return.
 
