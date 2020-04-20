@@ -492,6 +492,7 @@ init() ->
 -spec bind() -> 'ok'.
 -ifdef(TEST).
 bind() -> 'ok'.
+-spec handle_new(any()) -> 'ok'.
 handle_new(_) -> 'ok'.
 -else.
 bind() ->
