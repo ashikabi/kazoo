@@ -10,10 +10,13 @@
 -export([seq/0, blacklisted_url/0
         ,cleanup/0
         ,storage_doc/1
+        ,help_14316/0
         ]).
 
 %% API Shims
--export([create/3, create/4]).
+-export([create/3, create/4
+        ,update/3, update/4
+        ]).
 %%         ,fetch/1
 %%         ]).
 
@@ -32,7 +35,7 @@
 -include("kazoo_proper.hrl").
 -include_lib("kazoo_stdlib/include/kz_databases.hrl").
 
--define(ACCOUNT_NAMES, [<<"account_for_storage">>]).
+-define(ACCOUNT_NAMES, [<<?MODULE_STRING>>]).
 -define(UUID, <<"2426cb457dc530acc881977ccbc9a7a7">>).
 
 -define(BASE64_ENCODED, 'true').
@@ -52,6 +55,25 @@ create(API, AccountId, StorageDoc, ValidateSettings) ->
     RequestHeaders = pqc_cb_api:request_headers(API, [{<<"content-type">>, <<"application/json">>}]),
     pqc_cb_api:make_request([201]
                            ,fun kz_http:put/3
+                           ,StorageURL
+                           ,RequestHeaders
+                           ,kz_json:encode(pqc_cb_api:create_envelope(StorageDoc))
+                           ).
+
+-spec update(pqc_cb_api:state(), kz_term:api_ne_binary(), kz_term:ne_binary() | kz_json:object()) ->
+          pqc_cb_api:response().
+update(API, AccountId, StorageDoc) ->
+    update(API, AccountId, StorageDoc, 'undefined').
+
+-spec update(pqc_cb_api:state(), kz_term:api_ne_binary(), kz_term:ne_binary() | kz_json:object(), kz_term:api_boolean()) ->
+          pqc_cb_api:response().
+update(API, AccountId, <<UUID/binary>>, ValidateSettings) ->
+    update(API, AccountId, storage_doc(UUID), ValidateSettings);
+update(API, AccountId, StorageDoc, ValidateSettings) ->
+    StorageURL = storage_url(AccountId, ValidateSettings),
+    RequestHeaders = pqc_cb_api:request_headers(API, [{<<"content-type">>, <<"application/json">>}]),
+    pqc_cb_api:make_request([200]
+                           ,fun kz_http:post/3
                            ,StorageURL
                            ,RequestHeaders
                            ,kz_json:encode(pqc_cb_api:create_envelope(StorageDoc))
@@ -97,12 +119,82 @@ seq() ->
             ,fun global_test/0
             ,fun missing_ref_test/0
             ,fun blacklisted_url/0
+            ,fun help_14316/0
             ],
     lists:foreach(fun run_test/1, Tests).
 
 run_test(TestFun) ->
     TestFun(),
     cleanup().
+
+-spec help_14316() -> 'ok'.
+help_14316() ->
+    lager:info("CALL RECORDING TEST"),
+    API = init_api(),
+
+    AccountId = create_account(API),
+
+    UUID = kz_binary:rand_hex(16),
+    URL = <<"http://2600.hz/index.fu?key=abc123&env=ext&reseller_id=42&reseller_prefix=prefix&account_prefix=pdp&recording=">>,
+
+    HandlerSettings = kz_json:from_list([{<<"handler">>, <<"http">>}
+                                        ,{<<"name">>, <<"recording_server">>}
+                                        ,{<<"settings">>
+                                         ,kz_json:from_list([{<<"url">>, URL}
+                                                            ,{<<"verb">>, <<"post">>}
+                                                            ,{<<"base64_encode_data">>, 'false'}
+                                                            ])
+                                         }
+                                        ]),
+    Attachments = kz_json:from_list([{UUID, HandlerSettings}]),
+
+    Plan = kz_json:set_value([<<"modb">>, <<"types">>, <<"call_recording">>, <<"attachments">>, <<"handler">>], UUID, kz_json:new()),
+
+    StorageDoc = kz_json:from_list([{<<"attachments">>, Attachments}
+                                   ,{<<"plan">>, Plan}
+                                   ]),
+
+    kzs_plan:allow_validation_overrides(),
+    CreatedResp = create(API, AccountId, StorageDoc, 'false'),
+    lager:info("created resp: ~s", [CreatedResp]),
+
+    %% The data cache isn't populated right away, give it a second
+    %% timer:sleep(50),
+
+    StoreURL = kzc_recording:should_store_recording(AccountId, 'undefined'),
+    {'true', 'local'} = StoreURL,
+    lager:info("call recordings configured to store locally"),
+
+    'true' = has_expected_plan(AccountId, <<"call_recording">>, URL),
+
+    UpdateStorage = kz_json:set_value([<<"plan">>, <<"modb">>, <<"types">>, <<"mailbox_message">>, <<"attachments">>, <<"handler">>], UUID, StorageDoc),
+
+    UpdatedResp = update(API, AccountId, UpdateStorage, 'false'),
+    lager:info("updated resp: ~s", [UpdatedResp]),
+
+    'true' = has_expected_plan(AccountId, <<"mailbox_message">>, URL),
+
+    cleanup(API),
+
+    has_expected_plan(AccountId, <<"call_recording">>, 'undefined'),
+    has_expected_plan(AccountId, <<"mailbox_message">>, 'undefined'),
+
+    lager:info("FINISHED HELP 14316").
+
+has_expected_plan(AccountId, DocType, 'undefined') ->
+    DBPlan = kzs_plan:get_dataplan(kz_util:format_account_mod_id(AccountId), DocType),
+    lager:info("~s plan: ~p", [DocType, DBPlan]),
+    'false' = maps:is_key('att_handler', DBPlan),
+    'true';
+has_expected_plan(AccountId, DocType, <<URL/binary>>) ->
+    DBPlan = kzs_plan:get_dataplan(kz_util:format_account_mod_id(AccountId), DocType),
+    lager:info("~s plan: ~p", [DocType, DBPlan]),
+    {'kz_att_http', HandlerMap} = maps:get('att_handler', DBPlan),
+    'false' = maps:get('base64_encode_data', HandlerMap),
+    URL = maps:get('url', HandlerMap),
+    <<"post">> = maps:get('verb', HandlerMap),
+    lager:info("call recordings configured to store to configured URL"),
+    'true'.
 
 -spec blacklisted_url() -> 'ok'.
 blacklisted_url() ->
