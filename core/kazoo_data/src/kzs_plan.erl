@@ -492,6 +492,7 @@ init() ->
 -spec bind() -> 'ok'.
 -ifdef(TEST).
 bind() -> 'ok'.
+handle_new(_) -> 'ok'.
 -else.
 bind() ->
     RK = kz_binary:join([<<"kapi.conf">>
