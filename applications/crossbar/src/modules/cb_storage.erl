@@ -245,7 +245,7 @@ delete(Context, ?PLANS_TOKEN, _PlanId) ->
 -spec delete_account(cb_context:context(), kz_term:ne_binary()) -> cb_context:context().
 delete_account(Context, AccountId) ->
     lager:debug("account ~s deleted, removing any storage plans", [AccountId]),
-    kz_util:spawn(fun delete_account_storage/1, [AccountId]),
+    delete_account_storage(AccountId),
     Context.
 
 delete_account_storage(AccountId) ->
@@ -271,9 +271,8 @@ log_deleted(_Else) ->
     lager:info("failed to delete account storage plan: ~p", [_Else]).
 
 delete_storage_plans(StorageIDs) ->
-    lists:foreach(fun(Id) -> kz_datamgr:del_doc(?KZ_DATA_DB, Id) end
-                 ,StorageIDs
-                 ).
+    _Deleted = kz_datamgr:del_docs(?KZ_DATA_DB, StorageIDs),
+    lager:info("deleted storage docs ~p", [_Deleted]).
 
 %%------------------------------------------------------------------------------
 %% @doc Create a new instance with the data provided, if it is valid
