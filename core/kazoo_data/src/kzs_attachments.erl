@@ -109,7 +109,8 @@ do_stream_attachment_from_handler([{Handler, HandlerProps}], {Module, ModuleProp
 relay_stream_attachment(Caller, Ref, Module, Props, DbName, DocId, AName) ->
     case Module:fetch_attachment(Props, DbName, DocId, AName) of
         {'ok', Bin} -> relay_stream_attachment(Caller, Ref, Bin);
-        {'error', _} = Error -> Caller ! {Ref, Error}
+        {'error', _} = Error -> Caller ! {Ref, Error};
+        {'error', Reason, _Extended} -> Caller ! {Ref, {'error', Reason}}
     end.
 
 -define(CHUNK_SIZE, 8192).
