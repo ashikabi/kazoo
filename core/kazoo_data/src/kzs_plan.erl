@@ -16,7 +16,7 @@
 -export([init/0
         ,reload/0, reload/1, reload/2
         ,flush/0
-        ,handle_new/1
+        ,handle_new/1, handle_old/1
         ]).
 
 -export([reset_system_dataplan/0]).
@@ -486,6 +486,7 @@ start_connection(Tag, Params) ->
 
 -spec init() -> 'ok'.
 init() ->
+    lager:debug("initializing plans"),
     reload(),
     bind().
 
@@ -494,17 +495,29 @@ init() ->
 bind() -> 'ok'.
 -spec handle_new(any()) -> 'ok'.
 handle_new(_) -> 'ok'.
+
+-spec handle_old(any()) -> 'ok'.
+handle_old(_) -> 'ok'.
 -else.
 bind() ->
+    Bindings = [{<<"doc_created">>, fun ?MODULE:handle_new/1}
+               ,{<<"doc_deleted">>, fun ?MODULE:handle_old/1}
+               ],
+
+    lists:foreach(fun bind_for/1, Bindings).
+
+bind_for({Type, Fun}) ->
     RK = kz_binary:join([<<"kapi.conf">>
                         ,kz_term:to_binary(?KAZOO_DATA_PLAN_CACHE)
                         ,?KZ_DATA_DB
                         ,<<"storage">>
-                        ,<<"doc_created">>
+                        ,Type
                         ,<<"*">>
-                        ], <<".">>),
+                        ]
+                       ,<<".">>
+                       ),
     lager:debug("binding for new storage: ~s", [RK]),
-    kazoo_bindings:bind(RK, fun handle_new/1).
+    kazoo_bindings:bind(RK, Fun).
 
 -spec handle_new(kz_term:api_ne_binary() | kz_json:object() | kz_json:objects()) -> 'ok'.
 handle_new('undefined') -> 'ok';
@@ -527,6 +540,18 @@ load_account_or_storage(AccountId, AccountId) ->
     load_account(AccountId);
 load_account_or_storage(AccountId, StorageId) ->
     load_storage(AccountId, StorageId).
+
+-spec handle_old(kz_term:api_ne_binary() | kz_json:object() | kz_json:objects()) -> 'ok'.
+handle_old('undefined') -> 'ok';
+handle_old(<<Id/binary>>) ->
+    kz_cache:erase_local(?KAZOO_DATA_PLAN_CACHE, {'plan', Id});
+handle_old([JObj]) ->
+    handle_old(JObj);
+handle_old(JObj) ->
+    case kz_doc:type(JObj) of
+        <<"storage">> -> handle_old(kz_doc:id(JObj));
+        _Type -> handle_old(kz_json:get_ne_binary_value(<<"ID">>, JObj))
+    end.
 
 -endif.
 

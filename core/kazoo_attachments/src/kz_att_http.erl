@@ -130,12 +130,8 @@ fetch_attachment(HandlerProps, DbName, DocId, AName) ->
 
     FetchURL = join_url_and_querystring(URL, QS),
 
-    case FetchURL of
-        'undefined' -> kz_att_error:new('invalid_data', Routines);
-        FetchURL ->
-            lager:info("fetching attachment at ~s", [FetchURL]),
-            handle_fetch_attachment_resp(fetch_attachment(FetchURL), Routines)
-    end.
+    lager:info("fetching attachment at ~s", [FetchURL]),
+    handle_fetch_attachment_resp(fetch_attachment(FetchURL), Routines).
 
 join_url_and_querystring(<<URL/binary>>, QS) ->
     join_url_and_querystring(kz_http_util:urlsplit(URL), QS);
