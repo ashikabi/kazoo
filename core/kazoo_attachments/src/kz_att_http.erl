@@ -116,12 +116,12 @@ fields(_Settings) -> kz_att_util:default_format_url_fields().
 fetch_attachment(HandlerProps, DbName, DocId, AName) ->
     lager:info("~s/~s/~s: handler props: ~p", [DbName, DocId, AName, HandlerProps]),
     BaseUrlParam = kz_json:get_ne_binary_value(<<"url">>, HandlerProps),
-    HProps = kz_json:get_value(<<"handler_props">>, HandlerProps, #{}),
+    HProps = handler_props_map(HandlerProps),
 
     Routines = kz_att_error:fetch_routines(HandlerProps, DbName, DocId, AName),
 
     BaseUrl = kz_binary:strip_right(BaseUrlParam, $/),
-    ClientSegment = kz_att_util:format_url(HProps, {DbName, DocId, AName}, fields(HandlerProps)),
+    ClientSegment = kz_att_util:format_url(HProps, {DbName, DocId, AName}, fields(HProps)),
     Separator = base_separator(BaseUrl),
 
     URL = list_to_binary([BaseUrl, Separator, ClientSegment]),
@@ -134,6 +134,13 @@ fetch_attachment(HandlerProps, DbName, DocId, AName) ->
 
     lager:info("fetching attachment at ~s", [FetchURL]),
     handle_fetch_attachment_resp(fetch_attachment(FetchURL), Routines).
+
+-spec handler_props_map(gen_attachment:handler_props()) -> gen_attachment:settings().
+handler_props_map(HandlerProps) ->
+    case kz_json:get_value(<<"handler_props">>, HandlerProps) of
+        HP when is_map(HP) -> HP;
+        _ -> #{}
+    end.
 
 join_url_and_querystring(<<URL/binary>>, QS) ->
     join_url_and_querystring(kz_http_util:urlsplit(URL), QS);

@@ -634,7 +634,7 @@ maybe_update_plans(Context) ->
 
 maybe_update_plans(Context, 'success') ->
     SavedDoc = cb_context:doc(Context),
-    _ = kzs_plan:handle_new(SavedDoc),
+    _ = kzs_plan:handle_created(SavedDoc),
     Context;
 maybe_update_plans(Context, _Status) ->
     Context.

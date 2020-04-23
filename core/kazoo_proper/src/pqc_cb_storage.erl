@@ -161,7 +161,7 @@ help_14308() ->
     CreatedResp = create(API, AccountId, StorageDoc, 'false'),
     lager:info("created resp: ~s", [CreatedResp]),
 
-    help_14308_test_vm(API, AccountId),
+    _ = help_14308_test_vm(API, AccountId),
 
     cleanup(API),
     lager:info("FINISHED VANILLA URL").
