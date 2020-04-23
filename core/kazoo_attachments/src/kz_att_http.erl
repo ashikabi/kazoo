@@ -52,7 +52,7 @@ put_attachment(Settings, DbName, DocId, AName, Contents, Options) ->
             {'ok', url_fields(DocUrlField, NewUrl, Settings)};
         {'error', ErrorUrl, Resp} ->
             Routines = [{fun kz_att_error:set_req_url/2, ErrorUrl}
-                       | kz_att_error:put_routines(Settings, DbName, DocId, AName, Contents, Options)
+                        | kz_att_error:put_routines(Settings, DbName, DocId, AName, Contents, Options)
                        ],
             handle_http_error_response(Resp, Routines)
     end.
@@ -259,7 +259,7 @@ handle_http_error_response({'ok', RespCode, RespHeaders, RespBody} = _E, Routine
     NewRoutines = [{fun kz_att_error:set_resp_code/2, RespCode}
                   ,{fun kz_att_error:set_resp_headers/2, RespHeaders}
                   ,{fun kz_att_error:set_resp_body/2, RespBody}
-                  | Routines
+                   | Routines
                   ],
     lager:error("http storage error: ~p: ~s", [RespCode, RespBody]),
     lager:debug("resp headers: ~p", [RespHeaders]),
