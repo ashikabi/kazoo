@@ -114,18 +114,20 @@ fields(_Settings) -> kz_att_util:default_format_url_fields().
                       ,gen_attachment:att_name()
                       ) -> gen_attachment:fetch_response().
 fetch_attachment(HandlerProps, DbName, DocId, AName) ->
-    #{url := BaseUrlParam} = HandlerProps,
+    lager:info("~s/~s/~s: handler props: ~p", [DbName, DocId, AName, HandlerProps]),
+    BaseUrlParam = kz_json:get_ne_binary_value(<<"url">>, HandlerProps),
+    HProps = kz_json:get_value(<<"handler_props">>, HandlerProps, #{}),
 
     Routines = kz_att_error:fetch_routines(HandlerProps, DbName, DocId, AName),
 
     BaseUrl = kz_binary:strip_right(BaseUrlParam, $/),
-    ClientSegment = kz_att_util:format_url(HandlerProps, {DbName, DocId, AName}, fields(HandlerProps)),
+    ClientSegment = kz_att_util:format_url(HProps, {DbName, DocId, AName}, fields(HandlerProps)),
     Separator = base_separator(BaseUrl),
 
     URL = list_to_binary([BaseUrl, Separator, ClientSegment]),
 
     {'ok', Doc} = kz_datamgr:open_cache_doc(DbName, DocId),
-    Metadata = kz_doc:public_fields(Doc),
+    Metadata = kz_json:get_json_value(<<"metadata">>, Doc, kz_doc:public_fields(Doc)),
     QS = kz_http_util:json_to_querystring(Metadata),
 
     FetchURL = join_url_and_querystring(URL, QS),
