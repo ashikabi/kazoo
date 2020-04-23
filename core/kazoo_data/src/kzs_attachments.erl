@@ -124,7 +124,6 @@ relay_stream_attachment(Caller, Ref, Bin) ->
     Caller ! {Ref, {'ok', Bin}},
     relay_stream_attachment(Caller, Ref, <<>>).
 
-
 -type att_map() :: #{'att_handler':={_,_}
                     ,'att_post_handler':='external', _=>_
                     ,'server' := {module(), db()}

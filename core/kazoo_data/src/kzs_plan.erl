@@ -500,10 +500,9 @@ handle_new(_) -> 'ok'.
 handle_old(_) -> 'ok'.
 -else.
 bind() ->
-    Bindings = [{<<"doc_created">>, fun ?MODULE:handle_new/1}
-               ,{<<"doc_deleted">>, fun ?MODULE:handle_old/1}
+    Bindings = [{<<"doc_created">>, 'handle_new'}
+               ,{<<"doc_deleted">>, 'handle_old'}
                ],
-
     lists:foreach(fun bind_for/1, Bindings).
 
 bind_for({Type, Fun}) ->
@@ -516,8 +515,8 @@ bind_for({Type, Fun}) ->
                         ]
                        ,<<".">>
                        ),
-    lager:debug("binding for new storage: ~s", [RK]),
-    kazoo_bindings:bind(RK, Fun).
+    lager:debug("binding for storage doc events: ~s", [RK]),
+    kazoo_bindings:bind(RK, ?MODULE, Fun).
 
 -spec handle_new(kz_term:api_ne_binary() | kz_json:object() | kz_json:objects()) -> 'ok'.
 handle_new('undefined') -> 'ok';
@@ -607,7 +606,7 @@ load_account_storage(AccountId) ->
     case kz_datamgr:get_result_ids(?KZ_DATA_DB, ?KZS_PLAN_ACCOUNT_VIEW, [{'key', AccountId}]) of
         {'ok', []} -> 'ok';
         {'ok', StorageIds} -> load_account_storage(AccountId, StorageIds);
-        Error -> lager:error_unsafe("error reloading dataplans ~p", [Error])
+        Error -> lager:error("error reloading account ~s dataplan: ~p", [AccountId, Error])
     end.
 
 -spec load_account_storage(kz_term:ne_binary(), kz_term:ne_binaries()) -> 'ok'.
