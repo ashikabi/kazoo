@@ -10,7 +10,7 @@
 -export([seq/0, blacklisted_url/0
         ,cleanup/0
         ,storage_doc/1
-        ,help_14316/0
+        ,help_14316/0, help_14308/0
         ]).
 
 %% API Shims
@@ -120,12 +120,51 @@ seq() ->
             ,fun missing_ref_test/0
             ,fun blacklisted_url/0
             ,fun help_14316/0
+            ,fun help_14308/0
             ],
     lists:foreach(fun run_test/1, Tests).
 
 run_test(TestFun) ->
     TestFun(),
     cleanup().
+
+-spec help_14308() -> 'ok'.
+help_14308() ->
+    lager:info("VANILLA URL"),
+    API = init_api(),
+
+    AccountId = create_account(API),
+
+    UUID = kz_binary:rand_hex(16),
+    Base = pqc_httpd:base_url(),
+    URL = <<Base/binary, ?MODULE_STRING>>,
+
+    HandlerSettings = kz_json:from_list([{<<"handler">>, <<"http">>}
+                                        ,{<<"name">>, <<"recording_server">>}
+                                        ,{<<"settings">>
+                                         ,kz_json:from_list([{<<"url">>, URL}
+                                                            ,{<<"verb">>, <<"post">>}
+                                                            ,{<<"base64_encode_data">>, 'false'}
+                                                            ,{<<"field_list">>, []}
+                                                            ])
+                                         }
+                                        ]),
+    Attachments = kz_json:from_list([{UUID, HandlerSettings}]),
+
+    Plan = kz_json:set_value([<<"modb">>, <<"types">>, <<"mailbox_message">>, <<"attachments">>, <<"handler">>], UUID, kz_json:new()),
+
+    StorageDoc = kz_json:from_list([{<<"attachments">>, Attachments}
+                                   ,{<<"plan">>, Plan}
+                                   ]),
+
+    kzs_plan:allow_validation_overrides(),
+    CreatedResp = create(API, AccountId, StorageDoc, 'false'),
+    lager:info("created resp: ~s", [CreatedResp]),
+
+    help_14308_test_vm(API, AccountId),
+
+    cleanup(API),
+    lager:info("FINISHED VANILLA URL").
 
 -spec help_14316() -> 'ok'.
 help_14316() ->
@@ -198,7 +237,7 @@ has_expected_plan(AccountId, DocType, <<URL/binary>>) ->
 
 -spec blacklisted_url() -> 'ok'.
 blacklisted_url() ->
-    lager:info("SKIP TEST"),
+    lager:info("BLACKLIST TEST"),
 
     API = init_api(),
 
@@ -242,7 +281,7 @@ skip_validation_test() ->
     check_if_allowed(kz_json:decode(ShouldAgainFailToCreate), 'false'),
 
     cleanup(API),
-    lager:info("FINISHED NON-VALIDATION").
+    lager:info("FINISHED SKIP TEST").
 
 create_account(API) ->
     AccountResp = pqc_cb_accounts:create_account(API, hd(?ACCOUNT_NAMES)),
@@ -293,7 +332,37 @@ global_test() ->
 
     _ = test_vm_message(API, AccountId),
     cleanup(API),
-    lager:info("FINISHED").
+    lager:info("FINISHED GLOBAL").
+
+help_14308_test_vm(API, AccountId) ->
+    CreateBox = pqc_cb_vmboxes:create_box(API, AccountId, <<"1010">>),
+    lager:info("create VM box: ~p", [CreateBox]),
+    BoxId = kz_json:get_value([<<"data">>, <<"id">>], kz_json:decode(CreateBox)),
+
+    {'ok', MP3} = file:read_file(filename:join([code:priv_dir('kazoo_proper'), "mp3.mp3"])),
+    CreateVM = create_voicemail(API, AccountId, BoxId, MP3),
+    lager:info("create VM: ~p", [CreateVM]),
+
+    CreatedVM = kz_json:decode(CreateVM),
+    MediaId = kz_json:get_ne_binary_value([<<"data">>, <<"media_id">>], CreatedVM),
+
+    {'ok', GetVM} = pqc_httpd:wait_for_req([<<?MODULE_STRING>>]),
+    lager:info("get VM: ~p", [GetVM]),
+    {[RequestBody], [_AttachmentName]} = kz_json:get_values(GetVM),
+
+    'true' = handle_multipart_store(MediaId, MP3, RequestBody),
+    lager:info("got mp3 data on our web server!"),
+
+    %% pqc_httpd:update_req([<<?MODULE_STRING>>, AccountId, MediaId, AttachmentName], MP3),
+    %% lager:info("updating media to non-encoded MP3"),
+
+    MetadataResp = pqc_cb_vmboxes:fetch_message_metadata(API, AccountId, BoxId, MediaId),
+    lager:info("message ~s meta: ~s", [MediaId, MetadataResp]),
+    MediaId = kz_json:get_ne_binary_value([<<"data">>, <<"media_id">>], kz_json:decode(MetadataResp)),
+
+    MessageBin = pqc_cb_vmboxes:fetch_message_binary(API, AccountId, BoxId, MediaId),
+    lager:info("message bin =:= MP3: ~p", [MessageBin =:= MP3]),
+    MessageBin = MP3.
 
 test_vm_message(API, AccountId) ->
     CreateBox = pqc_cb_vmboxes:create_box(API, AccountId, <<"1010">>),
