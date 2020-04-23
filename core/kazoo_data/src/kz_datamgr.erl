@@ -992,7 +992,7 @@ update_not_found(DbName, Id, Options) ->
 
     JObj = kz_json:set_values(CreateProps, kz_json:new()),
     Updated = kz_json:set_values([{kz_doc:path_id(), Id}
-                                  | props:get_value('update', Options)
+                                 | props:get_value('update', Options)
                                  ]
                                  ++ props:get_value('extra_update', Options, [])
                                 ,JObj
@@ -1069,11 +1069,9 @@ fetch_attachment(DbName, DocId, AName) ->
 fetch_attachment(DbName, {DocType, DocId}, AName, Options) when ?VALID_DBNAME(DbName) ->
     fetch_attachment(DbName, DocId, AName, maybe_add_doc_type(DocType, Options));
 fetch_attachment(DbName, DocId, AName, Options) when ?VALID_DBNAME(DbName) ->
-    lager:info("fetch attachment options: ~p", [Options]),
     case attachment_options(DbName, DocId, Options) of
         {'error', _E}=Error -> Error;
         {'ok', NewOpts} ->
-            lager:info("fetch attachment new options: ~p", [NewOpts]),
             kzs_attachments:fetch_attachment(kzs_plan:plan(DbName, NewOpts), DbName, DocId, AName, Options)
     end;
 fetch_attachment(DbName, DocId, AName, Options) ->
@@ -1136,9 +1134,6 @@ put_attachment(DbName, {DocType, DocId}, AName, Contents, Options) ->
 put_attachment(DbName, DocId, AName, Contents, Options) when ?VALID_DBNAME(DbName) ->
     case attachment_options(DbName, DocId, Options) of
         {'ok', NewOpts} ->
-            lager:info("put attachment options: ~p", [Options]),
-            lager:info("put attachment newopts: ~p", [NewOpts]),
-
             NewOptions = props:delete('plan_override', NewOpts),
             kzs_attachments:put_attachment(kzs_plan:plan(DbName, NewOpts), DbName, DocId, AName, Contents, NewOptions);
         {'error', _} = Error -> Error
@@ -1184,7 +1179,7 @@ attachment_url(DbName, DocId, AttachmentId, Options) when ?VALID_DBNAME(DbName) 
     case kzs_doc:open_doc(Plan, DbName, DocId, props:delete('plan_override', Options)) of
         {'ok', JObj} ->
             NewOptions = [{'rev', kz_doc:revision(JObj)}
-                          | maybe_add_doc_type(kz_doc:type(JObj), Options)
+                         | maybe_add_doc_type(kz_doc:type(JObj), Options)
                          ],
             Handler = kz_doc:attachment_property(JObj, AttachmentId, <<"handler">>),
             kzs_attachments:attachment_url(Plan, DbName, DocId, AttachmentId, Handler, NewOptions);

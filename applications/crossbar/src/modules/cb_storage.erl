@@ -248,6 +248,7 @@ delete_account(Context, AccountId) ->
     delete_account_storage(AccountId),
     Context.
 
+-spec delete_account_storage(kz_term:ne_binary()) -> 'ok'.
 delete_account_storage(AccountId) ->
     case kz_datamgr:get_result_ids(?KZ_DATA_DB
                                   ,<<"storage/storage_by_account">>
@@ -262,6 +263,7 @@ delete_account_storage(AccountId) ->
     end,
     log_deleted(kz_datamgr:del_doc(?KZ_DATA_DB, AccountId)).
 
+-spec log_deleted({'ok', kz_json:object()} | kz_datamgr:data_error()) -> 'ok'.
 log_deleted({'ok', OK}) ->
     case kz_json:is_true(<<"ok">>, OK) of
         'true' -> lager:info("deleted account storage plan");
@@ -270,6 +272,7 @@ log_deleted({'ok', OK}) ->
 log_deleted(_Else) ->
     lager:info("failed to delete account storage plan: ~p", [_Else]).
 
+-spec delete_storage_plans(kz_term:ne_binaries()) -> 'ok'.
 delete_storage_plans(StorageIDs) ->
     _Deleted = kz_datamgr:del_docs(?KZ_DATA_DB, StorageIDs),
     lager:info("deleted storage docs ~p", [_Deleted]).
@@ -629,9 +632,11 @@ decode_json(RespBody) ->
             RespBody
     end.
 
+-spec maybe_update_plans(cb_context:context()) -> cb_context:context().
 maybe_update_plans(Context) ->
     maybe_update_plans(Context, cb_context:resp_status(Context)).
 
+-spec maybe_update_plans(cb_context:context(), crossbar_status()) -> cb_context:context().
 maybe_update_plans(Context, 'success') ->
     SavedDoc = cb_context:doc(Context),
     _ = kzs_plan:handle_created(SavedDoc),

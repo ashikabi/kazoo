@@ -52,7 +52,7 @@ put_attachment(Settings, DbName, DocId, AName, Contents, Options) ->
             {'ok', url_fields(DocUrlField, NewUrl, Settings)};
         {'error', ErrorUrl, Resp} ->
             Routines = [{fun kz_att_error:set_req_url/2, ErrorUrl}
-                        | kz_att_error:put_routines(Settings, DbName, DocId, AName, Contents, Options)
+                       | kz_att_error:put_routines(Settings, DbName, DocId, AName, Contents, Options)
                        ],
             handle_http_error_response(Resp, Routines)
     end.
@@ -114,7 +114,6 @@ fields(_Settings) -> kz_att_util:default_format_url_fields().
                       ,gen_attachment:att_name()
                       ) -> gen_attachment:fetch_response().
 fetch_attachment(HandlerProps, DbName, DocId, AName) ->
-    lager:info("~s/~s/~s: handler props: ~p", [DbName, DocId, AName, HandlerProps]),
     BaseUrlParam = kz_json:get_ne_binary_value(<<"url">>, HandlerProps),
     HProps = handler_props_map(HandlerProps),
 
@@ -132,7 +131,6 @@ fetch_attachment(HandlerProps, DbName, DocId, AName) ->
 
     FetchURL = join_url_and_querystring(URL, QS),
 
-    lager:info("fetching attachment at ~s", [FetchURL]),
     handle_fetch_attachment_resp(fetch_attachment(FetchURL), Routines).
 
 -spec handler_props_map(gen_attachment:handler_props()) -> gen_attachment:settings().
@@ -259,7 +257,7 @@ handle_http_error_response({'ok', RespCode, RespHeaders, RespBody} = _E, Routine
     NewRoutines = [{fun kz_att_error:set_resp_code/2, RespCode}
                   ,{fun kz_att_error:set_resp_headers/2, RespHeaders}
                   ,{fun kz_att_error:set_resp_body/2, RespBody}
-                   | Routines
+                  | Routines
                   ],
     lager:error("http storage error: ~p: ~s", [RespCode, RespBody]),
     lager:debug("resp headers: ~p", [RespHeaders]),

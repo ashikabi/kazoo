@@ -154,9 +154,7 @@ del_doc(#{server := {App, Conn}}=Server, DbName, Doc, Options) ->
 del_docs(Server, DbName, Docs, Options) ->
     do_delete_docs(Server, DbName, prepare_docs_for_deletion(Server, DbName, Docs), Options).
 
-do_delete_docs(_Server, _DbName, [], _Options) ->
-    lager:debug("no docs to delete"),
-    {'ok', []};
+do_delete_docs(_Server, _DbName, [], _Options) -> {'ok', []};
 do_delete_docs(#{server := {App, Conn}}, DbName, DelDocs, Options) ->
     {PreparedDocs, PublishDocs} = lists:unzip([prepare_doc_for_save(DbName, D) || D <- DelDocs]),
     try App:del_docs(Conn, DbName, PreparedDocs, Options) of
@@ -187,7 +185,7 @@ prepare_doc_for_del(Server, DbName, Doc) ->
       [{<<"_id">>, Id}
       ,{<<"_rev">>, DocRev}
       ,{<<"_deleted">>, 'true'}
-       | kzs_publish:publish_fields(Doc)
+      | kzs_publish:publish_fields(Doc)
       ]).
 
 -spec prepare_docs_for_deletion(map(), kz_term:ne_binary(), [kz_json:object() | kz_term:ne_binary()]) ->
@@ -253,7 +251,7 @@ prepare_doc_for_save(_Db, JObj, 'false') ->
 prepare_publish(JObj) ->
     PublishDoc = kz_json:from_list(
                    [{<<"_rev">>, kz_doc:revision(JObj)}
-                    | kzs_publish:publish_fields(JObj)
+                   | kzs_publish:publish_fields(JObj)
                    ]),
     {maybe_tombstone(JObj), PublishDoc}.
 
@@ -303,7 +301,7 @@ copy_doc(Src, Dst, CopySpec, CopyFun, Opts) ->
         {'ok', SourceDoc} ->
             Props = [{<<"_id">>, DestDocId}
                     ,{<<"pvt_account_db">>, DestDbName}
-                     | [{Key, 'null'} || Key <- ?DELETE_KEYS]
+                    | [{Key, 'null'} || Key <- ?DELETE_KEYS]
                     ],
             DestinationDoc = kz_json:set_values(Props, SourceDoc),
             Doc = copy_transform(Transform, SourceDoc, DestinationDoc),
