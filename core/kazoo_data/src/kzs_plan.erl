@@ -16,7 +16,7 @@
 -export([init/0
         ,reload/0, reload/1, reload/2
         ,flush/0
-        ,handle_new/1, handle_old/1
+        ,handle_created/1, handle_deleted/1
         ]).
 
 -export([reset_system_dataplan/0]).
@@ -493,15 +493,15 @@ init() ->
 -spec bind() -> 'ok'.
 -ifdef(TEST).
 bind() -> 'ok'.
--spec handle_new(any()) -> 'ok'.
-handle_new(_) -> 'ok'.
+-spec handle_created(any()) -> 'ok'.
+handle_created(_) -> 'ok'.
 
--spec handle_old(any()) -> 'ok'.
-handle_old(_) -> 'ok'.
+-spec handle_deleted(any()) -> 'ok'.
+handle_deleted(_) -> 'ok'.
 -else.
 bind() ->
-    Bindings = [{<<"doc_created">>, 'handle_new'}
-               ,{<<"doc_deleted">>, 'handle_old'}
+    Bindings = [{<<"doc_created">>, 'handle_created'}
+               ,{<<"doc_deleted">>, 'handle_deleted'}
                ],
     lists:foreach(fun bind_for/1, Bindings).
 
@@ -518,20 +518,20 @@ bind_for({Type, Fun}) ->
     lager:debug("binding for storage doc events: ~s", [RK]),
     kazoo_bindings:bind(RK, ?MODULE, Fun).
 
--spec handle_new(kz_term:api_ne_binary() | kz_json:object() | kz_json:objects()) -> 'ok'.
-handle_new('undefined') -> 'ok';
-handle_new(<<Id/binary>>) ->
+-spec handle_created(kz_term:api_ne_binary() | kz_json:object() | kz_json:objects()) -> 'ok'.
+handle_created('undefined') -> 'ok';
+handle_created(<<Id/binary>>) ->
     lager:warning("received new storage ~s", [Id]),
     case kz_datamgr:open_cache_doc(?KZ_DATA_DB, Id) of
         {'ok', Doc} -> load_account_or_storage(kz_doc:account_id(Doc), Id);
         {'error', _ERR} -> lager:error("error fetching storage doc ~s", [Id])
     end;
-handle_new([JObj]) ->
-    handle_new(JObj);
-handle_new(JObj) ->
+handle_created([JObj]) ->
+    handle_created(JObj);
+handle_created(JObj) ->
     case kz_doc:type(JObj) of
         <<"storage">> -> load_account_or_storage(kz_doc:account_id(JObj), kz_doc:id(JObj));
-        _Type -> handle_new(kz_json:get_ne_binary_value(<<"ID">>, JObj))
+        _Type -> handle_created(kz_json:get_ne_binary_value(<<"ID">>, JObj))
     end.
 
 -spec load_account_or_storage(kz_term:ne_binary(), kz_term:ne_binary()) -> 'ok'.
@@ -540,16 +540,16 @@ load_account_or_storage(AccountId, AccountId) ->
 load_account_or_storage(AccountId, StorageId) ->
     load_storage(AccountId, StorageId).
 
--spec handle_old(kz_term:api_ne_binary() | kz_json:object() | kz_json:objects()) -> 'ok'.
-handle_old('undefined') -> 'ok';
-handle_old(<<Id/binary>>) ->
+-spec handle_deleted(kz_term:api_ne_binary() | kz_json:object() | kz_json:objects()) -> 'ok'.
+handle_deleted('undefined') -> 'ok';
+handle_deleted(<<Id/binary>>) ->
     kz_cache:erase_local(?KAZOO_DATA_PLAN_CACHE, {'plan', Id});
-handle_old([JObj]) ->
-    handle_old(JObj);
-handle_old(JObj) ->
+handle_deleted([JObj]) ->
+    handle_deleted(JObj);
+handle_deleted(JObj) ->
     case kz_doc:type(JObj) of
-        <<"storage">> -> handle_old(kz_doc:id(JObj));
-        _Type -> handle_old(kz_json:get_ne_binary_value(<<"ID">>, JObj))
+        <<"storage">> -> handle_deleted(kz_doc:id(JObj));
+        _Type -> handle_deleted(kz_json:get_ne_binary_value(<<"ID">>, JObj))
     end.
 
 -endif.
